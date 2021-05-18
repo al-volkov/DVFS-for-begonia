@@ -27,7 +27,6 @@ struct spsa_policy_dbs_info
 
 	signed int delta;
 	unsigned int cur_estimation;
-	//unsigned int claster;
 
 	unsigned int sample_type:1;
 };

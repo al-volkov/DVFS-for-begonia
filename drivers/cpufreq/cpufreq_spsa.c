@@ -25,7 +25,7 @@
 #include "cpufreq_ondemand_copy.h"
 
 #define DEF_UP_THRESHOLD			(64)
-#define DEF_ALPHA_VALUE				(10000)
+#define DEF_ALPHA_VALUE				(160000)
 #define DEF_BETTA_VALUE				(40000)
 #define DEF_ETA_VALUE				(800)
 #define DEF_GAMMA_VALUE				(2000)
@@ -208,14 +208,6 @@ static unsigned int get_val(unsigned int freq, int cpu, unsigned int load,
 
 	weight = weights[index];
 
-	// if (load > spsa_tuners->up) {
-	// 	return 0;//weight - (load - spsa_tuners->eta) * (weight / 100);
-	// }
-
-	if (index == 15) {
-			return spsa_tuners->eta;
-	}
-
 	return weight;
 }
 
@@ -226,17 +218,12 @@ static u64 model_count(unsigned int freq, unsigned int load,
 
 	if (load > spsa_tuners->up) {
 		model_val = 2 << ((load - spsa_tuners->up) / 2);
-		//model_val = 2 << (load - spsa_tuners->up);
 	}	
 
 	model_val += get_val(freq, cpu, load, spsa_tuners);
 
 	return model_val;
 }
-
-//----------------for logs----------
-static unsigned int c = 0;
-//----------------------------------
 
 static struct spsa_core_params * get_spsa_core_params(unsigned int cpu, struct spsa_dbs_tuners *spsa_tuners) {
 
@@ -265,27 +252,6 @@ static void od_update(struct cpufreq_policy *policy)
 
 	dbs_info->cur_estimation = dbs_info->cur_estimation + (model / norm_betta) * norm_alpha * dbs_info->delta;
 
-	//index = cpufreq_frequency_table_target(policy, 2000000, CPUFREQ_RELATION_C);
-
-	//dbs_info->cur_estimation = policy->freq_table[index].frequency;
-
-	// c++;
-
-	// if (c == 300) {
-	//  	pr_alert("LOG: alpha - %u, betta - %u, gamma - %u, eta - %u, freq max - %lu", 
-	//  		spsa_tuners->alpha, 
-	//  		spsa_tuners->betta, 
-	//  		spsa_tuners->gamma, 
-	//  		spsa_tuners->eta, 
-	//  		policy->freq_table[index].frequency);
-
-	//  	int cpu = get_cpu();
-	//  	pr_alert("STRUCT - %p, cpu - %u, cpu_policy - %u, freq max - %u", dbs_info, cpu, policy->cpu, policy->freq_table[index].frequency);
-	//  	put_cpu();
-	//  	//pr_alert("LOG: model - %lu, f - %u, load - %u", model, policy->cur, load);
-	//  	c = 0;
-		
-	// }
 	
 	if (dbs_info->cur_estimation > policy->max) {
 	 	dbs_info->cur_estimation = policy->max;
@@ -300,18 +266,6 @@ static void od_update(struct cpufreq_policy *policy)
 	
 	dbs_info->freq_lo = 0;
 	policy_dbs->rate_mult = 1;
-
-	__cpufreq_driver_target(policy, freq_next, CPUFREQ_RELATION_C);
-
-	// int cpu = get_cpu();
-	// if (cpu == 3) {
-	// 	put_cpu();
-	// 	pr_alert("IN 3 CPU AAAA LOXOXOX");
-	// 	__cpufreq_driver_target(policy, 975000, CPUFREQ_RELATION_C);
-	// } else {
-	// 	put_cpu();
-	// 	
-	// }
 }
 
 static unsigned int od_dbs_update(struct cpufreq_policy *policy)
@@ -633,14 +587,6 @@ static ssize_t store_powersave_bias(struct gov_attr_set *attr_set,
 	return count;
 }
 
-// static ssize_t show_alpha(struct gov_attr_set *attr_set, char *buf)
-// {
-// 	struct dbs_data *dbs_data = to_dbs_data(attr_set);	
-// 	struct spsa_dbs_tuners *tuners = dbs_data->tuners;
-	
-// 	return sprintf(buf, "%u %u\n", tuners->alpha_clust_1, tuners->alpha_clust_2);
-// }
-
 gov_show_one_common(sampling_rate);
 gov_show_one_common(up_threshold);
 gov_show_one_common(sampling_down_factor);
@@ -731,8 +677,8 @@ static int od_init(struct dbs_data *dbs_data)
 	dbs_data->ignore_nice_load = 0;
 	dbs_data->io_is_busy = should_io_be_busy();
 
-	tuners->cluster_0.alpha = 160000;
-	tuners->cluster_1.alpha = 240000;
+	tuners->cluster_0.alpha = DEF_ALPHA_VALUE;
+	tuners->cluster_1.alpha = DEF_ALPHA_VALUE;
 	tuners->cluster_0.betta = DEF_BETTA_VALUE;
 	tuners->cluster_1.betta = DEF_BETTA_VALUE;
 	tuners->cluster_0.eta = DEF_ETA_VALUE;
@@ -768,7 +714,7 @@ static struct od_ops od_ops = {
 };
 
 static struct dbs_governor od_dbs_gov = {
-	.gov = CPUFREQ_DBS_GOVERNOR_INITIALIZER("ondemand_copy"),
+	.gov = CPUFREQ_DBS_GOVERNOR_INITIALIZER("spsa"),
 	.kobj_type = { .default_attrs = od_attributes },
 	.gov_dbs_update = od_dbs_update,
 	.alloc = od_alloc,
@@ -778,7 +724,7 @@ static struct dbs_governor od_dbs_gov = {
 	.start = od_start,
 };
 
-#define CPU_FREQ_GOV_ONDEMAND_COPY	(&od_dbs_gov.gov)
+#define CPU_FREQ_GOV_SPSA	(&od_dbs_gov.gov)
 
 static void od_set_powersave_bias(unsigned int powersave_bias)
 {
@@ -799,7 +745,7 @@ static void od_set_powersave_bias(unsigned int powersave_bias)
 			continue;
 
 		policy = cpufreq_cpu_get_raw(cpu);
-		if (!policy || policy->governor != CPU_FREQ_GOV_ONDEMAND_COPY)
+		if (!policy || policy->governor != CPU_FREQ_GOV_SPSA)
 			continue;
 
 		policy_dbs = policy->governor_data;
@@ -833,24 +779,23 @@ EXPORT_SYMBOL_GPL(od_unregister_powersave_bias_handler_copy);
 
 static int __init cpufreq_gov_dbs_init(void)
 {
-	return cpufreq_register_governor(CPU_FREQ_GOV_ONDEMAND_COPY);
+	return cpufreq_register_governor(CPU_FREQ_GOV_SPSA);
 }
 
 static void __exit cpufreq_gov_dbs_exit(void)
 {
-	cpufreq_unregister_governor(CPU_FREQ_GOV_ONDEMAND_COPY);
+	cpufreq_unregister_governor(CPU_FREQ_GOV_SPSA);
 }
 
-MODULE_AUTHOR("Venkatesh Pallipadi <venkatesh.pallipadi@intel.com>");
-MODULE_AUTHOR("Alexey Starikovskiy <alexey.y.starikovskiy@intel.com>");
-MODULE_DESCRIPTION("'cpufreq_ondemand_copy' - A dynamic cpufreq governor for "
-	"Low Latency Frequency Transition capable processors");
+MODULE_AUTHOR("Bogdanov Evgenii <gekabog@gmail.com>");
+MODULE_DESCRIPTION("'cpufreq_spsa' - A dynamic cpufreq governor for "
+	"Low Latency Frequency Transition capable processors based on SPSA algorithm");
 MODULE_LICENSE("GPL");
 
-#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND_COPY
+#ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_SPSA
 struct cpufreq_governor *cpufreq_default_governor(void)
 {
-	return CPU_FREQ_GOV_ONDEMAND_COPY;
+	return CPU_FREQ_GOV_SPSA;
 }
 
 fs_initcall(cpufreq_gov_dbs_init);
