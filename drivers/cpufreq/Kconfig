@@ -193,7 +193,7 @@ config CPU_FREQ_GOV_SPSA
 	tristate "'spsa' cpufreq policy governor"
 	select CPU_FREQ_GOV_COMMON
 	help
-	  'ondemand_copy' - This driver adds a dynamic cpufreq policy governor.
+	  'spsa' - This driver adds a dynamic cpufreq policy governor.
 	  The governor does a periodic polling and 
 	  changes frequency based on the CPU utilization.
 	  The support for this governor depends on CPU capability to

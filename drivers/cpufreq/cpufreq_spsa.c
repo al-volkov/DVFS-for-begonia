@@ -22,7 +22,7 @@
 
 #include <linux/kernel.h>
 
-#include "cpufreq_ondemand_copy.h"
+#include "cpufreq_spsa.h"
 
 #define DEF_UP_THRESHOLD			(64)
 #define DEF_ALPHA_VALUE				(160000)
@@ -266,6 +266,8 @@ static void od_update(struct cpufreq_policy *policy)
 	
 	dbs_info->freq_lo = 0;
 	policy_dbs->rate_mult = 1;
+
+    __cpufreq_driver_target(policy, freq_next, CPUFREQ_RELATION_C);
 }
 
 static unsigned int od_dbs_update(struct cpufreq_policy *policy)
