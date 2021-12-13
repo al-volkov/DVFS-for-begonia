@@ -25,10 +25,8 @@
 #include "cpufreq_spsa2.h"
 
 #define DEF_UP_THRESHOLD			(64)
-#define DEF_ALPHA_VALUE				(160000)
+#define DEF_ALPHA_VALUE				(40000)
 #define DEF_BETTA_VALUE				(40000)
-#define DEF_ETA_VALUE				(800)
-#define DEF_GAMMA_VALUE				(2000)
 #define START_FREQUENCY_ESTIMATION		(500000)
 #define MIN_FREQUENCY_UP_THRESHOLD		(70)
 #define MAX_FREQUENCY_UP_THRESHOLD		(100)
@@ -262,8 +260,7 @@ static void od_update(struct cpufreq_policy *policy)
     } else {
         old_model = model;
     }
-    spsa_phase += 1;
-    spsa_phase = spsa_phase % 2;
+    spsa_phase = !spsa_phase;
 
     if (dbs_info->cur_estimation > policy->max) {
         dbs_info->cur_estimation = policy->max;
@@ -425,74 +422,6 @@ static ssize_t store_alpha_1(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_eta_0(struct gov_attr_set *attr_set,
-                           const char *buf, size_t count)
-{
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
-    unsigned int input;
-    int ret;
-    ret = sscanf(buf, "%u", &input);
-
-    if (ret != 1) {
-        return -EINVAL;
-    }
-
-    spsa_tuners->cluster_0.eta = input;
-    return count;
-}
-
-static ssize_t store_eta_1(struct gov_attr_set *attr_set,
-                           const char *buf, size_t count)
-{
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
-    unsigned int input;
-    int ret;
-    ret = sscanf(buf, "%u", &input);
-
-    if (ret != 1) {
-        return -EINVAL;
-    }
-
-    spsa_tuners->cluster_1.eta = input;
-    return count;
-}
-
-static ssize_t store_gamma_0(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
-{
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
-    unsigned int input;
-    int ret;
-    ret = sscanf(buf, "%u", &input);
-
-    if (ret != 1) {
-        return -EINVAL;
-    }
-
-    spsa_tuners->cluster_0.gamma = input;
-    return count;
-}
-
-static ssize_t store_gamma_1(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
-{
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
-    unsigned int input;
-    int ret;
-    ret = sscanf(buf, "%u", &input);
-
-    if (ret != 1) {
-        return -EINVAL;
-    }
-
-    spsa_tuners->cluster_1.gamma = input;
-    return count;
-}
-
 static ssize_t store_up_0(struct gov_attr_set *attr_set,
                           const char *buf, size_t count)
 {
@@ -614,10 +543,6 @@ gov_show_two(spsa, betta, 0);
 gov_show_two(spsa, betta, 1);
 gov_show_two(spsa, alpha, 0);
 gov_show_two(spsa, alpha, 1);
-gov_show_two(spsa, eta, 0);
-gov_show_two(spsa, eta, 1);
-gov_show_two(spsa, gamma, 0);
-gov_show_two(spsa, gamma, 1);
 gov_show_two(spsa, up, 0);
 gov_show_two(spsa, up, 1);
 
@@ -630,10 +555,6 @@ gov_attr_rw(up_0);
 gov_attr_rw(up_1);
 gov_attr_rw(alpha_0);
 gov_attr_rw(alpha_1);
-gov_attr_rw(eta_0);
-gov_attr_rw(eta_1);
-gov_attr_rw(gamma_0);
-gov_attr_rw(gamma_1);
 gov_attr_rw(sampling_down_factor);
 gov_attr_rw(ignore_nice_load);
 gov_attr_rw(powersave_bias);
@@ -645,12 +566,8 @@ static struct attribute *od_attributes[] = {
         &betta_1.attr,
         &alpha_0.attr,
         &alpha_1.attr,
-        &eta_0.attr,
-        &eta_1.attr,
         &up_0.attr,
         &up_1.attr,
-        &gamma_0.attr,
-        &gamma_1.attr,
         &sampling_down_factor.attr,
         &ignore_nice_load.attr,
         &powersave_bias.attr,
@@ -698,10 +615,6 @@ static int od_init(struct dbs_data *dbs_data)
     tuners->cluster_1.alpha = DEF_ALPHA_VALUE;
     tuners->cluster_0.betta = DEF_BETTA_VALUE;
     tuners->cluster_1.betta = DEF_BETTA_VALUE;
-    tuners->cluster_0.eta = DEF_ETA_VALUE;
-    tuners->cluster_1.eta = DEF_ETA_VALUE;
-    tuners->cluster_0.gamma = DEF_GAMMA_VALUE;
-    tuners->cluster_1.gamma = DEF_GAMMA_VALUE;
     tuners->cluster_0.up = DEF_UP_THRESHOLD;
     tuners->cluster_1.up = DEF_UP_THRESHOLD;
 
