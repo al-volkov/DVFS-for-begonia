@@ -260,7 +260,7 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int freq_next;
     unsigned int index;
     unsigned int load = dbs_update(policy);
-    logg(policy->cpu, load, policy->cur);
+    //logg(policy->cpu, load, policy->cur);
 
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
     unsigned int gcd_val = gcd(spsa_tuners->alpha, spsa_tuners->betta);

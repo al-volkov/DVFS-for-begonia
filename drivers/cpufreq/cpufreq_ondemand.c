@@ -148,7 +148,7 @@ static void od_update(struct cpufreq_policy *policy)
 	struct od_dbs_tuners *od_tuners = dbs_data->tuners;
 	unsigned int load = dbs_update(policy);
 
-    logg_od(policy->cpu, load, policy->cur);
+    //logg_od(policy->cpu, load, policy->cur);
 
 
     dbs_info->freq_lo = 0;
