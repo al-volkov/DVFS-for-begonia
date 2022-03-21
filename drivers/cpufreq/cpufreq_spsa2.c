@@ -24,15 +24,18 @@
 
 #include "cpufreq_spsa2.h"
 
-#define DEF_UP_THRESHOLD			(64)
-#define DEF_ALPHA_VALUE				(40000)
-#define DEF_BETTA_VALUE				(40000)
-#define START_FREQUENCY_ESTIMATION		(500000)
-#define MIN_FREQUENCY_UP_THRESHOLD		(70)
-#define MAX_FREQUENCY_UP_THRESHOLD		(100)
+#include <linux/ktime.h>
+#include <linux/timekeeping.h>
+
+#define DEF_UP_THRESHOLD            (64)
+#define DEF_ALPHA_VALUE                (40000)
+#define DEF_BETTA_VALUE                (40000)
+#define START_FREQUENCY_ESTIMATION        (500000)
+#define MIN_FREQUENCY_UP_THRESHOLD        (70)
+#define MAX_FREQUENCY_UP_THRESHOLD        (100)
 //------------------------
-#define DEF_SAMPLING_DOWN_FACTOR		(1)
-#define MAX_SAMPLING_DOWN_FACTOR		(100000)
+#define DEF_SAMPLING_DOWN_FACTOR        (1)
+#define MAX_SAMPLING_DOWN_FACTOR        (100000)
 
 
 /*
@@ -48,12 +51,12 @@ static int should_io_be_busy(void)
 {
 #if defined(CONFIG_X86)
     /*
-	 * For Intel, Core 2 (model 15) and later have an efficient idle.
-	 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL &&
-			boot_cpu_data.x86 == 6 &&
-			boot_cpu_data.x86_model >= 15)
-		return 1;
+     * For Intel, Core 2 (model 15) and later have an efficient idle.
+     */
+    if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL &&
+            boot_cpu_data.x86 == 6 &&
+            boot_cpu_data.x86_model >= 15)
+        return 1;
 #endif
     return 0;
 }
@@ -63,18 +66,18 @@ static int should_io_be_busy(void)
  * Returns the freq_hi to be used right now and will set freq_hi_delay_us,
  * freq_lo, and freq_lo_delay_us in percpu area for averaging freqs.
  */
-static unsigned int generic_powersave_bias_target(struct cpufreq_policy *policy,
+static unsigned int generic_powersave_bias_target(struct cpufreq_policy* policy,
                                                   unsigned int freq_next, unsigned int relation)
 {
     unsigned int freq_req, freq_reduc, freq_avg;
     unsigned int freq_hi, freq_lo;
     unsigned int index;
     unsigned int delay_hi_us;
-    struct policy_dbs_info *policy_dbs = policy->governor_data;
-    struct spsa_policy_dbs_info *dbs_info = to_dbs_info(policy_dbs);
-    struct dbs_data *dbs_data = policy_dbs->dbs_data;
-    struct od_dbs_tuners *od_tuners = dbs_data->tuners;
-    struct cpufreq_frequency_table *freq_table = policy->freq_table;
+    struct policy_dbs_info* policy_dbs = policy->governor_data;
+    struct spsa_policy_dbs_info* dbs_info = to_dbs_info(policy_dbs);
+    struct dbs_data* dbs_data = policy_dbs->dbs_data;
+    struct od_dbs_tuners* od_tuners = dbs_data->tuners;
+    struct cpufreq_frequency_table* freq_table = policy->freq_table;
 
     if (!freq_table) {
         dbs_info->freq_lo = 0;
@@ -108,14 +111,15 @@ static unsigned int generic_powersave_bias_target(struct cpufreq_policy *policy,
     return freq_hi;
 }
 
-static void ondemand_powersave_bias_init(struct cpufreq_policy *policy)
+static void ondemand_powersave_bias_init(struct cpufreq_policy* policy)
 {
-    struct spsa_policy_dbs_info *dbs_info = to_dbs_info(policy->governor_data);
+    struct spsa_policy_dbs_info* dbs_info = to_dbs_info(policy->governor_data);
 
     dbs_info->freq_lo = 0;
 }
 
-static signed int generate_delta() {
+static signed int generate_delta()
+{
 
     if (prandom_u32() & 0x1) {
         return 1;
@@ -182,7 +186,8 @@ static unsigned int weights[16] = {
 };
 
 
-static unsigned int find(unsigned int *freq, unsigned int val) {
+static unsigned int find(unsigned int* freq, unsigned int val)
+{
     for (int i = 0; i < 16; i++) {
         if (val == freq[i]) {
             return i;
@@ -193,7 +198,8 @@ static unsigned int find(unsigned int *freq, unsigned int val) {
 }
 
 static unsigned int get_val(unsigned int freq, int cpu, unsigned int load,
-                            struct spsa_core_params *spsa_tuners) {
+                            struct spsa_core_params* spsa_tuners)
+{
 
     unsigned int index = 0;
     unsigned int weight = 0;
@@ -210,7 +216,7 @@ static unsigned int get_val(unsigned int freq, int cpu, unsigned int load,
 }
 
 static u64 model_count(unsigned int freq, unsigned int load,
-                       struct spsa_core_params *spsa_tuners, int cpu)
+                       struct spsa_core_params* spsa_tuners, int cpu)
 {
     u64 model_val = 0;
 
@@ -223,7 +229,8 @@ static u64 model_count(unsigned int freq, unsigned int load,
     return model_val;
 }
 
-static struct spsa_core_params * get_spsa_core_params(unsigned int cpu, struct spsa_dbs_tuners *spsa_tuners) {
+static struct spsa_core_params* get_spsa_core_params(unsigned int cpu, struct spsa_dbs_tuners* spsa_tuners)
+{
 
     if (cpu < 6) {
         return &spsa_tuners->cluster_0;
@@ -237,25 +244,31 @@ static unsigned int spsa_phase = 0;
 
 static u64 old_model = 0;
 
-
-
-static void od_update(struct cpufreq_policy *policy)
+static void logg(int cpu, unsigned int load, unsigned int freq)
 {
-    struct policy_dbs_info *policy_dbs = policy->governor_data;
-    struct spsa_policy_dbs_info *dbs_info = to_dbs_info(policy_dbs);
-    struct dbs_data *dbs_data = policy_dbs->dbs_data;
-    struct spsa_core_params *spsa_tuners = get_spsa_core_params(policy->cpu, dbs_data->tuners);
+
+    pr_alert("gov spsa2, cpu %d, freq %u, load is %u", cpu, freq, load);
+}
+
+static void od_update(struct cpufreq_policy* policy)
+{
+    struct policy_dbs_info* policy_dbs = policy->governor_data;
+    struct spsa_policy_dbs_info* dbs_info = to_dbs_info(policy_dbs);
+    struct dbs_data* dbs_data = policy_dbs->dbs_data;
+    struct spsa_core_params* spsa_tuners = get_spsa_core_params(policy->cpu, dbs_data->tuners);
 
     unsigned int freq_next;
     unsigned int index;
     unsigned int load = dbs_update(policy);
+    logg(policy->cpu, load, policy->cur);
+
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
     unsigned int gcd_val = gcd(spsa_tuners->alpha, spsa_tuners->betta);
 
     unsigned int norm_alpha = spsa_tuners->alpha / gcd_val;
     unsigned int norm_betta = spsa_tuners->betta / gcd_val;
 
-    if(spsa_phase){
+    if (spsa_phase) {
         dbs_info->cur_estimation = dbs_info->cur_estimation + ((model - old_model) / norm_betta) * norm_alpha * dbs_info->delta;
     } else {
         old_model = model;
@@ -271,7 +284,7 @@ static void od_update(struct cpufreq_policy *policy)
     }
 
     freq_next = dbs_info->cur_estimation;
-    if(spsa_phase) {
+    if (spsa_phase) {
         dbs_info->delta = generate_delta();
         freq_next += spsa_tuners->betta * dbs_info->delta;
     }
@@ -282,11 +295,11 @@ static void od_update(struct cpufreq_policy *policy)
     __cpufreq_driver_target(policy, freq_next, CPUFREQ_RELATION_C);
 }
 
-static unsigned int od_dbs_update(struct cpufreq_policy *policy)
+static unsigned int od_dbs_update(struct cpufreq_policy* policy)
 {
-    struct policy_dbs_info *policy_dbs = policy->governor_data;
-    struct dbs_data *dbs_data = policy_dbs->dbs_data;
-    struct spsa_policy_dbs_info *dbs_info = to_dbs_info(policy_dbs);
+    struct policy_dbs_info* policy_dbs = policy->governor_data;
+    struct dbs_data* dbs_data = policy_dbs->dbs_data;
+    struct spsa_policy_dbs_info* dbs_info = to_dbs_info(policy_dbs);
     int sample_type = dbs_info->sample_type;
 
     /* Common NORMAL_SAMPLE setup */
@@ -315,10 +328,10 @@ static unsigned int od_dbs_update(struct cpufreq_policy *policy)
 /************************** sysfs interface ************************/
 static struct dbs_governor od_dbs_gov;
 
-static ssize_t store_io_is_busy(struct gov_attr_set *attr_set, const char *buf,
+static ssize_t store_io_is_busy(struct gov_attr_set* attr_set, const char* buf,
                                 size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
     unsigned int input;
     int ret;
 
@@ -333,10 +346,10 @@ static ssize_t store_io_is_busy(struct gov_attr_set *attr_set, const char *buf,
     return count;
 }
 
-static ssize_t store_up_threshold(struct gov_attr_set *attr_set,
-                                  const char *buf, size_t count)
+static ssize_t store_up_threshold(struct gov_attr_set* attr_set,
+                                  const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -350,11 +363,11 @@ static ssize_t store_up_threshold(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_betta_0(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
+static ssize_t store_betta_0(struct gov_attr_set* attr_set,
+                             const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -367,11 +380,11 @@ static ssize_t store_betta_0(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_betta_1(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
+static ssize_t store_betta_1(struct gov_attr_set* attr_set,
+                             const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -384,11 +397,11 @@ static ssize_t store_betta_1(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_alpha_0(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
+static ssize_t store_alpha_0(struct gov_attr_set* attr_set,
+                             const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
 
     unsigned int input;
     int ret;
@@ -403,11 +416,11 @@ static ssize_t store_alpha_0(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_alpha_1(struct gov_attr_set *attr_set,
-                             const char *buf, size_t count)
+static ssize_t store_alpha_1(struct gov_attr_set* attr_set,
+                             const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
 
     unsigned int input;
     int ret;
@@ -422,11 +435,11 @@ static ssize_t store_alpha_1(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_up_0(struct gov_attr_set *attr_set,
-                          const char *buf, size_t count)
+static ssize_t store_up_0(struct gov_attr_set* attr_set,
+                          const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -439,11 +452,11 @@ static ssize_t store_up_0(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_up_1(struct gov_attr_set *attr_set,
-                          const char *buf, size_t count)
+static ssize_t store_up_1(struct gov_attr_set* attr_set,
+                          const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct spsa_dbs_tuners *spsa_tuners = dbs_data->tuners;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct spsa_dbs_tuners* spsa_tuners = dbs_data->tuners;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -456,11 +469,11 @@ static ssize_t store_up_1(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_sampling_down_factor(struct gov_attr_set *attr_set,
-                                          const char *buf, size_t count)
+static ssize_t store_sampling_down_factor(struct gov_attr_set* attr_set,
+                                          const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct policy_dbs_info *policy_dbs;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct policy_dbs_info* policy_dbs;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -471,7 +484,8 @@ static ssize_t store_sampling_down_factor(struct gov_attr_set *attr_set,
     dbs_data->sampling_down_factor = input;
 
     /* Reset down sampling multiplier in case it was active */
-    list_for_each_entry(policy_dbs, &attr_set->policy_list, list) {
+    list_for_each_entry(policy_dbs, &attr_set->policy_list, list)
+    {
         /*
          * Doing this without locking might lead to using different
          * rate_mult values in od_update() and od_dbs_update().
@@ -484,10 +498,10 @@ static ssize_t store_sampling_down_factor(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_ignore_nice_load(struct gov_attr_set *attr_set,
-                                      const char *buf, size_t count)
+static ssize_t store_ignore_nice_load(struct gov_attr_set* attr_set,
+                                      const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
     unsigned int input;
     int ret;
 
@@ -509,12 +523,12 @@ static ssize_t store_ignore_nice_load(struct gov_attr_set *attr_set,
     return count;
 }
 
-static ssize_t store_powersave_bias(struct gov_attr_set *attr_set,
-                                    const char *buf, size_t count)
+static ssize_t store_powersave_bias(struct gov_attr_set* attr_set,
+                                    const char* buf, size_t count)
 {
-    struct dbs_data *dbs_data = to_dbs_data(attr_set);
-    struct od_dbs_tuners *od_tuners = dbs_data->tuners;
-    struct policy_dbs_info *policy_dbs;
+    struct dbs_data* dbs_data = to_dbs_data(attr_set);
+    struct od_dbs_tuners* od_tuners = dbs_data->tuners;
+    struct policy_dbs_info* policy_dbs;
     unsigned int input;
     int ret;
     ret = sscanf(buf, "%u", &input);
@@ -534,16 +548,27 @@ static ssize_t store_powersave_bias(struct gov_attr_set *attr_set,
 }
 
 gov_show_one_common(sampling_rate);
+
 gov_show_one_common(up_threshold);
+
 gov_show_one_common(sampling_down_factor);
+
 gov_show_one_common(ignore_nice_load);
+
 gov_show_one_common(io_is_busy);
+
 gov_show_one(od, powersave_bias);
+
 gov_show_two(spsa, betta, 0);
+
 gov_show_two(spsa, betta, 1);
+
 gov_show_two(spsa, alpha, 0);
+
 gov_show_two(spsa, alpha, 1);
+
 gov_show_two(spsa, up, 0);
+
 gov_show_two(spsa, up, 1);
 
 gov_attr_rw(sampling_rate);
@@ -559,7 +584,7 @@ gov_attr_rw(sampling_down_factor);
 gov_attr_rw(ignore_nice_load);
 gov_attr_rw(powersave_bias);
 
-static struct attribute *od_attributes[] = {
+static struct attribute* od_attributes[] = {
         &sampling_rate.attr,
         &up_threshold.attr,
         &betta_0.attr,
@@ -577,23 +602,23 @@ static struct attribute *od_attributes[] = {
 
 /************************** sysfs end ************************/
 
-static struct policy_dbs_info *od_alloc(void)
+static struct policy_dbs_info* od_alloc(void)
 {
-    struct spsa_policy_dbs_info *dbs_info;
+    struct spsa_policy_dbs_info* dbs_info;
 
     dbs_info = kzalloc(sizeof(*dbs_info), GFP_KERNEL);
     return dbs_info ? &dbs_info->policy_dbs : NULL;
 }
 
-static void od_free(struct policy_dbs_info *policy_dbs)
+static void od_free(struct policy_dbs_info* policy_dbs)
 {
     pr_alert("End\n");
     kfree(to_dbs_info(policy_dbs));
 }
 
-static int od_init(struct dbs_data *dbs_data)
+static int od_init(struct dbs_data* dbs_data)
 {
-    struct spsa_dbs_tuners *tuners;
+    struct spsa_dbs_tuners* tuners;
     u64 idle_time;
     int cpu;
 
@@ -622,14 +647,14 @@ static int od_init(struct dbs_data *dbs_data)
     return 0;
 }
 
-static void od_exit(struct dbs_data *dbs_data)
+static void od_exit(struct dbs_data* dbs_data)
 {
     kfree(dbs_data->tuners);
 }
 
-static void od_start(struct cpufreq_policy *policy)
+static void od_start(struct cpufreq_policy* policy)
 {
-    struct spsa_policy_dbs_info *dbs_info = to_dbs_info(policy->governor_data);
+    struct spsa_policy_dbs_info* dbs_info = to_dbs_info(policy->governor_data);
 
     dbs_info->sample_type = OD_NORMAL_SAMPLE;
 
@@ -645,7 +670,7 @@ static struct od_ops od_ops = {
 
 static struct dbs_governor od_dbs_gov = {
         .gov = CPUFREQ_DBS_GOVERNOR_INITIALIZER("spsa2"),
-        .kobj_type = { .default_attrs = od_attributes },
+        .kobj_type = {.default_attrs = od_attributes},
         .gov_dbs_update = od_dbs_update,
         .alloc = od_alloc,
         .free = od_free,
@@ -654,7 +679,7 @@ static struct dbs_governor od_dbs_gov = {
         .start = od_start,
 };
 
-#define CPU_FREQ_GOV_SPSA2	(&od_dbs_gov.gov)
+#define CPU_FREQ_GOV_SPSA2    (&od_dbs_gov.gov)
 
 static void od_set_powersave_bias(unsigned int powersave_bias)
 {
@@ -665,11 +690,12 @@ static void od_set_powersave_bias(unsigned int powersave_bias)
     cpumask_clear(&done);
 
     get_online_cpus();
-    for_each_online_cpu(cpu) {
-        struct cpufreq_policy *policy;
-        struct policy_dbs_info *policy_dbs;
-        struct dbs_data *dbs_data;
-        struct od_dbs_tuners *od_tuners;
+    for_each_online_cpu(cpu)
+    {
+        struct cpufreq_policy* policy;
+        struct policy_dbs_info* policy_dbs;
+        struct dbs_data* dbs_data;
+        struct od_dbs_tuners* od_tuners;
 
         if (cpumask_test_cpu(cpu, &done))
             continue;
@@ -691,13 +717,14 @@ static void od_set_powersave_bias(unsigned int powersave_bias)
     put_online_cpus();
 }
 
-void od_register_powersave_bias_handler_copy2(unsigned int (*f)
-        (struct cpufreq_policy *, unsigned int, unsigned int),
-                                             unsigned int powersave_bias)
+void od_register_powersave_bias_handler_copy2(unsigned int (* f)
+        (struct cpufreq_policy*, unsigned int, unsigned int),
+                                              unsigned int powersave_bias)
 {
     od_ops.powersave_bias_target = f;
     od_set_powersave_bias(powersave_bias);
 }
+
 EXPORT_SYMBOL_GPL(od_register_powersave_bias_handler_copy2);
 
 void od_unregister_powersave_bias_handler_copy2(void)
@@ -705,14 +732,19 @@ void od_unregister_powersave_bias_handler_copy2(void)
     od_ops.powersave_bias_target = generic_powersave_bias_target;
     od_set_powersave_bias(0);
 }
+
 EXPORT_SYMBOL_GPL(od_unregister_powersave_bias_handler_copy2);
 
-static int __init cpufreq_gov_dbs_init(void)
+static int __init
+
+cpufreq_gov_dbs_init(void)
 {
     return cpufreq_register_governor(CPU_FREQ_GOV_SPSA2);
 }
 
-static void __exit cpufreq_gov_dbs_exit(void)
+static void __exit
+
+cpufreq_gov_dbs_exit(void)
 {
     cpufreq_unregister_governor(CPU_FREQ_GOV_SPSA2);
 }
@@ -725,7 +757,7 @@ MODULE_LICENSE("GPL");
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_SPSA2
 struct cpufreq_governor *cpufreq_default_governor(void)
 {
-	return CPU_FREQ_GOV_SPSA2;
+    return CPU_FREQ_GOV_SPSA2;
 }
 
 fs_initcall(cpufreq_gov_dbs_init);

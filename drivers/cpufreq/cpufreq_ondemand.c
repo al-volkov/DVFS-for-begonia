@@ -129,6 +129,12 @@ static void dbs_freq_increase(struct cpufreq_policy *policy, unsigned int freq)
 			CPUFREQ_RELATION_L : CPUFREQ_RELATION_H);
 }
 
+static void logg_od(int cpu, unsigned int load, unsigned int freq)
+{
+
+    pr_alert("gov ondemand, cpu %d, freq %u, load is %u", cpu, freq, load);
+}
+
 /*
  * Every sampling_rate, we check, if current idle time is less than 20%
  * (default), then we try to increase frequency. Else, we adjust the frequency
@@ -142,7 +148,10 @@ static void od_update(struct cpufreq_policy *policy)
 	struct od_dbs_tuners *od_tuners = dbs_data->tuners;
 	unsigned int load = dbs_update(policy);
 
-	dbs_info->freq_lo = 0;
+    logg_od(policy->cpu, load, policy->cur);
+
+
+    dbs_info->freq_lo = 0;
 
 	/* Check for frequency increase */
 	if (load > dbs_data->up_threshold) {
