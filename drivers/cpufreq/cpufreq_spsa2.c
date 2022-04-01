@@ -28,8 +28,8 @@
 #include <linux/timekeeping.h>
 
 #define DEF_UP_THRESHOLD            (64)
-#define DEF_ALPHA_VALUE                (40000)
-#define DEF_BETTA_VALUE                (40000)
+#define DEF_ALPHA_VALUE                (30000)
+#define DEF_BETTA_VALUE                (35000)
 #define START_FREQUENCY_ESTIMATION        (500000)
 #define MIN_FREQUENCY_UP_THRESHOLD        (70)
 #define MAX_FREQUENCY_UP_THRESHOLD        (100)
@@ -244,7 +244,7 @@ static unsigned int spsa_phase = 0;
 
 static u64 old_model = 0;
 
-static void logg(int cpu, unsigned int load, unsigned int freq)
+static void log_spsa(int cpu, unsigned int load, unsigned int freq)
 {
 
     pr_alert("gov spsa2, cpu %d, freq %u, load is %u", cpu, freq, load);
@@ -260,7 +260,19 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int freq_next;
     unsigned int index;
     unsigned int load = dbs_update(policy);
-    //logg(policy->cpu, load, policy->cur);
+
+    unsigned int j;
+
+    unsigned int cpus[8];
+    int i = 0;
+
+    for_each_cpu(j, policy->cpus)
+    {
+        cpus[i] = j;
+        i += 1;
+    }
+
+    //log_spsa(policy->cpu, load, policy->cur);
 
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
     unsigned int gcd_val = gcd(spsa_tuners->alpha, spsa_tuners->betta);
@@ -269,7 +281,7 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int norm_betta = spsa_tuners->betta / gcd_val;
 
     if (spsa_phase) {
-        dbs_info->cur_estimation = dbs_info->cur_estimation + ((model - old_model) / norm_betta) * norm_alpha * dbs_info->delta;
+        dbs_info->cur_estimation = dbs_info->cur_estimation + ((old_model - model) / norm_betta) * norm_alpha * dbs_info->delta;
     } else {
         old_model = model;
     }
