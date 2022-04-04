@@ -30,6 +30,8 @@
 #define DEF_UP_THRESHOLD            (64)
 #define DEF_ALPHA_VALUE                (30000)
 #define DEF_BETTA_VALUE                (35000)
+#define DEF_ALPHA_VALUE_BIG                (30000)
+#define DEF_BETTA_VALUE_BIG                (35000)
 #define START_FREQUENCY_ESTIMATION        (500000)
 #define MIN_FREQUENCY_UP_THRESHOLD        (70)
 #define MAX_FREQUENCY_UP_THRESHOLD        (100)
@@ -649,9 +651,9 @@ static int od_init(struct dbs_data* dbs_data)
     dbs_data->io_is_busy = should_io_be_busy();
 
     tuners->cluster_0.alpha = DEF_ALPHA_VALUE;
-    tuners->cluster_1.alpha = DEF_ALPHA_VALUE;
+    tuners->cluster_1.alpha = DEF_ALPHA_VALUE_BIG;
     tuners->cluster_0.betta = DEF_BETTA_VALUE;
-    tuners->cluster_1.betta = DEF_BETTA_VALUE;
+    tuners->cluster_1.betta = DEF_BETTA_VALUE_BIG;
     tuners->cluster_0.up = DEF_UP_THRESHOLD;
     tuners->cluster_1.up = DEF_UP_THRESHOLD;
 
