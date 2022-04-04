@@ -263,17 +263,6 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int index;
     unsigned int load = dbs_update(policy);
 
-    unsigned int j;
-
-    unsigned int cpus[8];
-    int i = 0;
-
-    for_each_cpu(j, policy->cpus)
-    {
-        cpus[i] = j;
-        i += 1;
-    }
-
     //log_spsa(policy->cpu, load, policy->cur);
 
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
