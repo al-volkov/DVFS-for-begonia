@@ -28,10 +28,10 @@
 #include <linux/timekeeping.h>
 
 #define DEF_UP_THRESHOLD            (64)
-#define DEF_ALPHA_VALUE                (30000)
-#define DEF_BETTA_VALUE                (35000)
-#define DEF_ALPHA_VALUE_BIG                (30000)
-#define DEF_BETTA_VALUE_BIG                (35000)
+#define DEF_ALPHA_VALUE                (26000)
+#define DEF_BETTA_VALUE                (26000)
+#define DEF_ALPHA_VALUE_BIG                (31000)
+#define DEF_BETTA_VALUE_BIG                (31000)
 #define START_FREQUENCY_ESTIMATION        (500000)
 #define MIN_FREQUENCY_UP_THRESHOLD        (70)
 #define MAX_FREQUENCY_UP_THRESHOLD        (100)
@@ -252,6 +252,32 @@ static void log_spsa(int cpu, unsigned int load, unsigned int freq)
     pr_alert("gov spsa2, cpu %d, freq %u, load is %u", cpu, freq, load);
 }
 
+static unsigned int find_closest(unsigned int frequency, unsigned int cpu)
+{
+    unsigned int* freq;
+    unsigned int closest;
+    int i;
+
+    if (cpu < 6) {
+        freq = freq_1;
+    } else {
+        freq = freq_2;
+    }
+
+    closest = freq[0];
+
+    for (i = 0; i < 16; i++) {
+        if (abs(freq[i] - frequency) < abs(freq[i] - closest)) {
+            closest = freq[i];
+        }
+    }
+    pr_alert("freq - %u closeset - %u, cpu - %u", frequency, closest, cpu);
+
+    return closest;
+
+
+}
+
 static void od_update(struct cpufreq_policy* policy)
 {
     struct policy_dbs_info* policy_dbs = policy->governor_data;
@@ -263,7 +289,7 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int index;
     unsigned int load = dbs_update(policy);
 
-    //log_spsa(policy->cpu, load, policy->cur);
+    log_spsa(policy->cpu, load, policy->cur);
 
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
     unsigned int gcd_val = gcd(spsa_tuners->alpha, spsa_tuners->betta);
@@ -272,7 +298,8 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int norm_betta = spsa_tuners->betta / gcd_val;
 
     if (spsa_phase) {
-        dbs_info->cur_estimation = dbs_info->cur_estimation + ((old_model - model) / norm_betta) * norm_alpha * dbs_info->delta;
+        dbs_info->cur_estimation = dbs_info->cur_estimation - ((model - old_model) / norm_betta) * norm_alpha * dbs_info->delta;
+        dbs_info->cur_estimation = find_closest(dbs_info->cur_estimation, policy->cpu);
     } else {
         old_model = model;
     }
@@ -290,6 +317,7 @@ static void od_update(struct cpufreq_policy* policy)
     if (spsa_phase) {
         dbs_info->delta = generate_delta();
         freq_next += spsa_tuners->betta * dbs_info->delta;
+        freq_next = find_closest(freq_next, policy->cpu);
     }
 
     dbs_info->freq_lo = 0;
