@@ -28,10 +28,10 @@
 #include <linux/timekeeping.h>
 
 #define DEF_UP_THRESHOLD            (64)
-#define DEF_ALPHA_VALUE                (26000)
-#define DEF_BETTA_VALUE                (26000)
-#define DEF_ALPHA_VALUE_BIG                (31000)
-#define DEF_BETTA_VALUE_BIG                (31000)
+#define DEF_ALPHA_VALUE                (33000)
+#define DEF_BETTA_VALUE                (66000)
+#define DEF_ALPHA_VALUE_BIG                (44000)
+#define DEF_BETTA_VALUE_BIG                (88000)
 #define START_FREQUENCY_ESTIMATION        (500000)
 #define MIN_FREQUENCY_UP_THRESHOLD        (70)
 #define MAX_FREQUENCY_UP_THRESHOLD        (100)
@@ -267,11 +267,11 @@ static unsigned int find_closest(unsigned int frequency, unsigned int cpu)
     closest = freq[0];
 
     for (i = 0; i < 16; i++) {
-        if (abs(freq[i] - frequency) < abs(freq[i] - closest)) {
+        if (abs(freq[i] - frequency) < abs(frequency - closest)) {
             closest = freq[i];
         }
     }
-    pr_alert("freq - %u closeset - %u, cpu - %u", frequency, closest, cpu);
+    //pr_alert("freq - %u closeset - %u, cpu - %u", frequency, closest, cpu);
 
     return closest;
 
@@ -289,7 +289,11 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int index;
     unsigned int load = dbs_update(policy);
 
-    log_spsa(policy->cpu, load, policy->cur);
+    unsigned int disturbed_frequency;
+    unsigned int disturbed_load;
+    u64 disturbed_model;
+
+    //log_spsa(policy->cpu, load, policy->cur);
 
     u64 model = model_count(policy->cur, load, spsa_tuners, policy->cpu);
     unsigned int gcd_val = gcd(spsa_tuners->alpha, spsa_tuners->betta);
@@ -297,13 +301,13 @@ static void od_update(struct cpufreq_policy* policy)
     unsigned int norm_alpha = spsa_tuners->alpha / gcd_val;
     unsigned int norm_betta = spsa_tuners->betta / gcd_val;
 
-    if (spsa_phase) {
-        dbs_info->cur_estimation = dbs_info->cur_estimation - ((model - old_model) / norm_betta) * norm_alpha * dbs_info->delta;
-        dbs_info->cur_estimation = find_closest(dbs_info->cur_estimation, policy->cpu);
-    } else {
-        old_model = model;
-    }
-    spsa_phase = !spsa_phase;
+    dbs_info->delta = generate_delta();
+    disturbed_frequency = find_closest(dbs_info->cur_estimation + spsa_tuners->betta * dbs_info->delta,policy->cpu);
+    disturbed_load = load * dbs_info->cur_estimation / disturbed_frequency;
+    disturbed_model = model_count(disturbed_frequency, disturbed_load, spsa_tuners, policy->cpu);
+
+    dbs_info->cur_estimation = dbs_info->cur_estimation - ((disturbed_model - model) / norm_betta) * norm_alpha * dbs_info->delta;
+    dbs_info->cur_estimation = find_closest(dbs_info->cur_estimation, policy->cpu);
 
     if (dbs_info->cur_estimation > policy->max) {
         dbs_info->cur_estimation = policy->max;
@@ -314,12 +318,6 @@ static void od_update(struct cpufreq_policy* policy)
     }
 
     freq_next = dbs_info->cur_estimation;
-    if (spsa_phase) {
-        dbs_info->delta = generate_delta();
-        freq_next += spsa_tuners->betta * dbs_info->delta;
-        freq_next = find_closest(freq_next, policy->cpu);
-    }
-
     dbs_info->freq_lo = 0;
     policy_dbs->rate_mult = 1;
 
@@ -779,11 +777,6 @@ cpufreq_gov_dbs_exit(void)
 {
     cpufreq_unregister_governor(CPU_FREQ_GOV_SPSA2);
 }
-
-MODULE_AUTHOR("Bogdanov Evgenii <gekabog@gmail.com>");
-MODULE_DESCRIPTION("'cpufreq_spsa' - A dynamic cpufreq governor for "
-"Low Latency Frequency Transition capable processors based on SPSA algorithm");
-MODULE_LICENSE("GPL");
 
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_SPSA2
 struct cpufreq_governor *cpufreq_default_governor(void)

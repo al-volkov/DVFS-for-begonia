@@ -386,7 +386,9 @@ static void eval_target_freq(struct interactive_cpu *icpu)
 	tunables->boosted = tunables->boost ||
 			    now < tunables->boostpulse_endtime;
 
-	if (cpu_load >= tunables->go_hispeed_load || tunables->boosted) {
+    pr_alert("gov interactive cpu %u freq %u load %d",policy->cpu, policy->cur, cpu_load);
+
+    if (cpu_load >= tunables->go_hispeed_load || tunables->boosted) {
 		if (policy->cur < tunables->hispeed_freq) {
 			new_freq = tunables->hispeed_freq;
 		} else {
@@ -450,7 +452,6 @@ static void eval_target_freq(struct interactive_cpu *icpu)
 			icpu->target_freq, policy->cur, new_freq);
 		goto exit;
 	}
-
 	trace_cpufreq_interactive_target(cpu, cpu_load, icpu->target_freq,
 					 policy->cur, new_freq);
 
