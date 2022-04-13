@@ -28,10 +28,10 @@
 #include <linux/timekeeping.h>
 
 #define DEF_UP_THRESHOLD            (64)
-#define DEF_ALPHA_VALUE                (26000)
-#define DEF_BETTA_VALUE                (26000)
-#define DEF_ALPHA_VALUE_BIG                (31000)
-#define DEF_BETTA_VALUE_BIG                (31000)
+#define DEF_ALPHA_VALUE                (22000) //22000
+#define DEF_BETTA_VALUE                (44000) //44000
+#define DEF_ALPHA_VALUE_BIG                (40000) //53000
+#define DEF_BETTA_VALUE_BIG                (120000) //67000
 #define START_FREQUENCY_ESTIMATION        (500000)
 #define MIN_FREQUENCY_UP_THRESHOLD        (70)
 #define MAX_FREQUENCY_UP_THRESHOLD        (100)
@@ -267,11 +267,11 @@ static unsigned int find_closest(unsigned int frequency, unsigned int cpu)
     closest = freq[0];
 
     for (i = 0; i < 16; i++) {
-        if (abs(freq[i] - frequency) < abs(freq[i] - closest)) {
+        if (abs(freq[i] - frequency) < abs(frequency - closest)) {
             closest = freq[i];
         }
     }
-    pr_alert("freq - %u closeset - %u, cpu - %u", frequency, closest, cpu);
+    //pr_alert("freq - %u closeset - %u, cpu - %u", frequency, closest, cpu);
 
     return closest;
 
@@ -779,11 +779,6 @@ cpufreq_gov_dbs_exit(void)
 {
     cpufreq_unregister_governor(CPU_FREQ_GOV_SPSA2);
 }
-
-MODULE_AUTHOR("Bogdanov Evgenii <gekabog@gmail.com>");
-MODULE_DESCRIPTION("'cpufreq_spsa' - A dynamic cpufreq governor for "
-"Low Latency Frequency Transition capable processors based on SPSA algorithm");
-MODULE_LICENSE("GPL");
 
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_SPSA2
 struct cpufreq_governor *cpufreq_default_governor(void)
